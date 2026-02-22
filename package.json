@@ -1,0 +1,15 @@
+{
+  "name": "rainbird-esp32",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rain Bird BLE-to-MQTT bridge for ESP32-C3",
+  "scripts": {
+    "build": "~/.platformio/penv/bin/pio run",
+    "changeset": "changeset",
+    "version": "changeset version"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.8"
+  },
+  "license": "ISC"
+}
