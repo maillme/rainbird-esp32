@@ -1,5 +1,15 @@
 # rainbird-esp32
 
+## 0.2.3
+
+### Patch Changes
+
+- Stability improvements: watchdog timeout, battery smoothing, MQTT backoff
+
+  - Increase watchdog timeout from 30s to 60s for BLE operation headroom
+  - Smooth battery percentage with 3-reading moving average
+  - Exponential backoff on MQTT reconnect (5s → 300s cap, resets on success)
+
 ## 0.2.2
 
 ### Patch Changes

@@ -34,9 +34,10 @@ bool MqttHandler::isConnected() {
 void MqttHandler::connectMqtt() {
     if (_mqtt.connected()) return;
 
-    // Cooldown between reconnect attempts
+    // Exponential backoff between reconnect attempts (5s → 10s → 20s → ... → 300s max)
     static unsigned long lastAttempt = 0;
-    if (millis() - lastAttempt < 5000) return;
+    static unsigned long backoffMs = 5000;
+    if (millis() - lastAttempt < backoffMs) return;
     lastAttempt = millis();
 
     Serial.printf("[MQTT] Connecting to %s:%d...\n", MQTT_HOST, MQTT_PORT);
@@ -54,6 +55,7 @@ void MqttHandler::connectMqtt() {
 
     if (connected) {
         Serial.println("[MQTT] Connected");
+        backoffMs = 5000;  // Reset backoff on successful connect
 
         // Publish availability
         publishAvailability(true);
@@ -82,7 +84,8 @@ void MqttHandler::connectMqtt() {
 
         Serial.println("[MQTT] Subscribed to command topics");
     } else {
-        Serial.printf("[MQTT] Failed, rc=%d. Retry in 5s\n", _mqtt.state());
+        Serial.printf("[MQTT] Failed, rc=%d. Retry in %lus\n", _mqtt.state(), backoffMs / 1000);
+        if (backoffMs < 300000) backoffMs *= 2;  // Double backoff, cap at 5 minutes
     }
 }
 

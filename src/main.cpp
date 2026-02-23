@@ -8,7 +8,7 @@
 #include "rainbird_ble.h"
 #include "mqtt_handler.h"
 
-#define WDT_TIMEOUT_SEC 30
+#define WDT_TIMEOUT_SEC 60
 
 RainBirdBLE ble;
 MqttHandler mqtt;
@@ -17,6 +17,11 @@ unsigned long lastStatusPoll = 0;
 unsigned long lastHeartbeat = -HEARTBEAT_INTERVAL_MS;  // Fire immediately on first connect
 bool initialPollDone = false;
 unsigned long followUpPollAt = 0;  // Schedule a poll after station duration expires
+
+// Battery percentage moving average (smooths noisy readings)
+#define BATTERY_AVG_SAMPLES 3
+int batteryPctBuf[BATTERY_AVG_SAMPLES] = {-1, -1, -1};
+int batteryBufIdx = 0;
 
 void connectWiFi() {
     if (WiFi.status() == WL_CONNECTED) return;
@@ -74,9 +79,17 @@ void pollStatus() {
             else if (mv >= 4800) pct = 30 + (mv - 4800) * 30 / 400;  // 4800-5200 = 30-60%
             else if (mv >= 4400) pct =  5 + (mv - 4400) * 25 / 400;  // 4400-4800 = 5-30%
             else                 pct = 0;
-            mqtt.publishBatteryPercent((uint8_t)pct);
-            Serial.printf("[Poll] Battery: %d mV (%d%%), RSSI: %d dBm\n",
-                          resp.batteryMillivolts, pct, resp.bleRssi);
+            // Store in ring buffer and compute moving average
+            batteryPctBuf[batteryBufIdx] = pct;
+            batteryBufIdx = (batteryBufIdx + 1) % BATTERY_AVG_SAMPLES;
+            int sum = 0, count = 0;
+            for (int i = 0; i < BATTERY_AVG_SAMPLES; i++) {
+                if (batteryPctBuf[i] >= 0) { sum += batteryPctBuf[i]; count++; }
+            }
+            int avgPct = sum / count;
+            mqtt.publishBatteryPercent((uint8_t)avgPct);
+            Serial.printf("[Poll] Battery: %d mV (%d%%, avg %d%%), RSSI: %d dBm\n",
+                          resp.batteryMillivolts, pct, avgPct, resp.bleRssi);
         }
     }
 
