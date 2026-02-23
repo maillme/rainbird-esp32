@@ -76,7 +76,6 @@ void MqttHandler::connectMqtt() {
         Serial.println("[MQTT] Subscribed to command topics");
     } else {
         Serial.printf("[MQTT] Failed, rc=%d. Retry in 5s\n", _mqtt.state());
-        delay(5000);
     }
 }
 
@@ -188,6 +187,30 @@ void MqttHandler::publishDiscovery() {
         serializeJson(doc, buf);
         _mqtt.publish((String(MQTT_DISCOVERY_PREFIX) + "/number/rainbird/water_budget/config").c_str(), buf, true);
     }
+
+    // Bridge heartbeat sensor (for HA "last seen" tracking)
+    publishSensorDiscovery("Bridge Heartbeat", "bridge_heartbeat",
+                           (String(MQTT_BASE_TOPIC) + "/heartbeat/state").c_str(),
+                           nullptr, nullptr, "mdi:heart-pulse");
+    discoveryPause();
+
+    // Bridge uptime sensor
+    publishSensorDiscovery("Bridge Uptime", "bridge_uptime",
+                           (String(MQTT_BASE_TOPIC) + "/uptime/state").c_str(),
+                           "s", "duration", "mdi:timer-outline");
+    discoveryPause();
+
+    // Bridge WiFi RSSI sensor
+    publishSensorDiscovery("Bridge WiFi RSSI", "bridge_wifi_rssi",
+                           (String(MQTT_BASE_TOPIC) + "/wifi_rssi/state").c_str(),
+                           "dBm", "signal_strength", "mdi:wifi");
+    discoveryPause();
+
+    // Bridge free heap sensor
+    publishSensorDiscovery("Bridge Free Heap", "bridge_free_heap",
+                           (String(MQTT_BASE_TOPIC) + "/free_heap/state").c_str(),
+                           "B", nullptr, "mdi:memory");
+    discoveryPause();
 
     // Run Program buttons
     publishButtonDiscovery("Run Program A", "run_program_a",
@@ -393,6 +416,23 @@ void MqttHandler::publishStationState(uint8_t station, bool on) {
 void MqttHandler::publishAvailability(bool online) {
     _mqtt.publish((String(MQTT_BASE_TOPIC) + "/availability").c_str(),
                   online ? "online" : "offline", true);
+}
+
+void MqttHandler::publishHeartbeat() {
+    unsigned long uptimeSec = millis() / 1000;
+    int32_t wifiRssi = WiFi.RSSI();
+    uint32_t freeHeap = ESP.getFreeHeap();
+
+    _mqtt.publish((String(MQTT_BASE_TOPIC) + "/heartbeat/state").c_str(), "online", true);
+    _mqtt.publish((String(MQTT_BASE_TOPIC) + "/uptime/state").c_str(),
+                  String(uptimeSec).c_str(), true);
+    _mqtt.publish((String(MQTT_BASE_TOPIC) + "/wifi_rssi/state").c_str(),
+                  String(wifiRssi).c_str(), true);
+    _mqtt.publish((String(MQTT_BASE_TOPIC) + "/free_heap/state").c_str(),
+                  String(freeHeap).c_str(), true);
+
+    Serial.printf("[Heartbeat] uptime=%lus, WiFi RSSI=%d dBm, heap=%u B\n",
+                  uptimeSec, wifiRssi, freeHeap);
 }
 
 // --- MQTT Message Handling ---

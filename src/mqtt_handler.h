@@ -42,6 +42,7 @@ public:
     void publishWaterBudget(uint8_t percent);
     void publishStationState(uint8_t station, bool on);
     void publishAvailability(bool online);
+    void publishHeartbeat();
 
 private:
     WiFiClient _wifiClient;

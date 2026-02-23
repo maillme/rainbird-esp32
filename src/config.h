@@ -11,10 +11,15 @@
 #define RAINBIRD_NOTIFY_UUID  "0000fe47-8e22-4541-9d4c-21edae82ed19"
 
 // Timing
-#define STATUS_POLL_INTERVAL_MS  1800000   // 30 minutes
+#define STATUS_POLL_INTERVAL_MS  14400000  // 4 hours (BLE poll — saves Rain Bird battery)
+#define HEARTBEAT_INTERVAL_MS    3600000   // 1 hour (MQTT heartbeat + healthcheck, no BLE)
 #define BLE_CONNECT_TIMEOUT_MS   10000     // 10 seconds
 #define BLE_RESPONSE_TIMEOUT_MS  5000      // 5 seconds
 #define DEFAULT_STATION_DURATION 10        // minutes
+
+// Healthchecks.io
+#define HEALTHCHECK_HOST "hc-ping.com"
+#define HEALTHCHECK_PATH "/4b28c66e-9f1a-45e4-8e55-94f7913f42ea"
 
 // MQTT Topics
 #define MQTT_BASE_TOPIC "rainbird"

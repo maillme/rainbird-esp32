@@ -1,14 +1,18 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include <esp_task_wdt.h>
 #include "config.h"
 #include "rainbird_ble.h"
 #include "mqtt_handler.h"
+
+#define WDT_TIMEOUT_SEC 30
 
 RainBirdBLE ble;
 MqttHandler mqtt;
 
 unsigned long lastStatusPoll = 0;
+unsigned long lastHeartbeat = 0;
 bool initialPollDone = false;
 unsigned long followUpPollAt = 0;  // Schedule a poll after station duration expires
 
@@ -58,10 +62,16 @@ void pollStatus() {
             SIP::parseBatteryStatus(buf, len, resp)) {
             mqtt.publishBatteryVoltage(resp.batteryMillivolts);
             mqtt.publishBleRssi(resp.bleRssi);
-            // Convert mV to percentage (4x AA alkaline: 4000 mV dead, 6400 mV fresh)
-            int pct = ((int)resp.batteryMillivolts - 4000) * 100 / 2400;
-            if (pct < 0) pct = 0;
-            if (pct > 100) pct = 100;
+            // Convert mV to percentage using alkaline 4xAA discharge curve
+            // Alkaline cells are non-linear: voltage drops fast at first, then plateaus
+            int mv = (int)resp.batteryMillivolts;
+            int pct;
+            if      (mv >= 5800) pct = 100;
+            else if (mv >= 5600) pct = 90 + (mv - 5600) * 10 / 200;  // 5600-5800 = 90-100%
+            else if (mv >= 5200) pct = 60 + (mv - 5200) * 30 / 400;  // 5200-5600 = 60-90%
+            else if (mv >= 4800) pct = 30 + (mv - 4800) * 30 / 400;  // 4800-5200 = 30-60%
+            else if (mv >= 4400) pct =  5 + (mv - 4400) * 25 / 400;  // 4400-4800 = 5-30%
+            else                 pct = 0;
             mqtt.publishBatteryPercent((uint8_t)pct);
             Serial.printf("[Poll] Battery: %d mV (%d%%), RSSI: %d dBm\n",
                           resp.batteryMillivolts, pct, resp.bleRssi);
@@ -167,12 +177,29 @@ void pollStatus() {
     Serial.println("[Poll] Status poll complete");
 }
 
+void pingHealthcheck() {
+    WiFiClient hcClient;
+    if (hcClient.connect(HEALTHCHECK_HOST, 80, 5000)) {
+        hcClient.printf("GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
+                        HEALTHCHECK_PATH, HEALTHCHECK_HOST);
+        hcClient.stop();
+        Serial.println("[Healthcheck] Ping sent");
+    } else {
+        Serial.println("[Healthcheck] Connection failed");
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
 
     Serial.println("\n=== Rain Bird BLE-to-MQTT Bridge ===");
     Serial.println("Starting...");
+
+    // Enable hardware watchdog (auto-reboots if loop hangs)
+    esp_task_wdt_init(WDT_TIMEOUT_SEC, true);
+    esp_task_wdt_add(NULL);
+    Serial.printf("[WDT] Watchdog enabled (%ds timeout)\n", WDT_TIMEOUT_SEC);
 
     // Init BLE (but don't connect yet)
     ble.init();
@@ -185,6 +212,8 @@ void setup() {
 }
 
 void loop() {
+    esp_task_wdt_reset();
+
     // Ensure WiFi is connected
     connectWiFi();
 
@@ -201,9 +230,16 @@ void loop() {
         Serial.printf("[Main] Follow-up poll scheduled in %d min 30s\n", startedDur);
     }
 
-    // Status poll: first attempt right away, then every STATUS_POLL_INTERVAL_MS
-    // Also poll at follow-up time after station run completes
     if (mqtt.isConnected()) {
+        // Heartbeat: MQTT publish + healthchecks.io ping (no BLE, every hour)
+        if (millis() - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
+            mqtt.publishHeartbeat();
+            pingHealthcheck();
+            lastHeartbeat = millis();
+        }
+
+        // BLE status poll: first attempt right away, then every STATUS_POLL_INTERVAL_MS
+        // Also poll at follow-up time after station run completes
         bool shouldPoll = !initialPollDone || (millis() - lastStatusPoll >= STATUS_POLL_INTERVAL_MS);
         if (!shouldPoll && followUpPollAt > 0 && millis() >= followUpPollAt) {
             shouldPoll = true;
