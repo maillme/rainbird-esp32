@@ -1,5 +1,6 @@
 #include "mqtt_handler.h"
 #include <ArduinoJson.h>
+#include <WiFiClientSecure.h>
 
 static const char* TAG = "MQTT";
 
@@ -63,6 +64,10 @@ void MqttHandler::connectMqtt() {
             _discoveryPublished = true;
         }
 
+        // Publish bridge version and update state immediately on connect
+        publishBridgeVersion();
+        publishUpdateState();
+
         // Subscribe to command topics
         _mqtt.subscribe((String(MQTT_BASE_TOPIC) + "/station/+/set").c_str());
         _mqtt.subscribe((String(MQTT_BASE_TOPIC) + "/station/+/duration/set").c_str());
@@ -73,6 +78,7 @@ void MqttHandler::connectMqtt() {
         _mqtt.subscribe((String(MQTT_BASE_TOPIC) + "/water_budget/set").c_str());
         _mqtt.subscribe((String(MQTT_BASE_TOPIC) + "/program/+/set").c_str());
         _mqtt.subscribe((String(MQTT_BASE_TOPIC) + "/ota/set").c_str());
+        _mqtt.subscribe((String(MQTT_BASE_TOPIC) + "/update/install").c_str());
 
         Serial.println("[MQTT] Subscribed to command topics");
     } else {
@@ -235,6 +241,10 @@ void MqttHandler::publishDiscovery() {
                            (String(MQTT_BASE_TOPIC) + "/program/3/set").c_str(), "mdi:play-circle");
     discoveryPause();
 
+    // Firmware update entity (checks GitHub releases)
+    publishUpdateDiscovery();
+    discoveryPause();
+
     Serial.println("[MQTT] Discovery published");
 }
 
@@ -319,6 +329,24 @@ void MqttHandler::publishButtonDiscovery(const char* name, const char* id,
     serializeJson(doc, buf);
     String topic = String(MQTT_DISCOVERY_PREFIX) + "/button/rainbird/" + id + "/config";
     _mqtt.publish(topic.c_str(), buf, true);
+}
+
+void MqttHandler::publishUpdateDiscovery() {
+    JsonDocument doc;
+    doc["name"] = "Firmware Update";
+    doc["uniq_id"] = "rainbird_firmware_update";
+    doc["dev_cla"] = "firmware";
+    doc["stat_t"] = String(MQTT_BASE_TOPIC) + "/update/state";
+    doc["cmd_t"] = String(MQTT_BASE_TOPIC) + "/update/install";
+    doc["pl_inst"] = "INSTALL";
+    doc["avty_t"] = String(MQTT_BASE_TOPIC) + "/availability";
+    JsonObject dev = doc["dev"].to<JsonObject>();
+    dev["ids"][0] = "rainbird_bat_bt_579a";
+
+    char buf[512];
+    serializeJson(doc, buf);
+    _mqtt.publish((String(MQTT_DISCOVERY_PREFIX) + "/update/rainbird/firmware_update/config").c_str(),
+                  buf, true);
 }
 
 void MqttHandler::publishSensorDiscovery(const char* name, const char* id,
@@ -441,6 +469,112 @@ String MqttHandler::consumeOtaUrl() {
     return url;
 }
 
+void MqttHandler::publishUpdateState() {
+    JsonDocument doc;
+    doc["installed_version"] = FW_VERSION;
+    doc["latest_version"] = _latestVersion.length() > 0 ? _latestVersion : FW_VERSION;
+    doc["title"] = "Rain Bird Bridge";
+    if (_releaseUrl.length() > 0) {
+        doc["release_url"] = _releaseUrl;
+    }
+
+    char buf[512];
+    serializeJson(doc, buf);
+    _mqtt.publish((String(MQTT_BASE_TOPIC) + "/update/state").c_str(), buf, true);
+}
+
+void MqttHandler::checkGitHubRelease() {
+    Serial.println("[Update] Checking GitHub for latest release...");
+
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    if (!client.connect(GITHUB_API_HOST, 443, 5000)) {
+        Serial.println("[Update] GitHub API connection failed");
+        return;
+    }
+
+    client.printf(
+        "GET %s HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "User-Agent: rainbird-esp32/%s\r\n"
+        "Accept: application/vnd.github+json\r\n"
+        "Connection: close\r\n\r\n",
+        GITHUB_RELEASES_PATH, GITHUB_API_HOST, FW_VERSION);
+
+    // Wait for response
+    unsigned long timeout = millis() + 10000;
+    while (!client.available() && millis() < timeout) {
+        delay(10);
+    }
+    if (!client.available()) {
+        Serial.println("[Update] GitHub API timeout");
+        client.stop();
+        return;
+    }
+
+    // Check HTTP status
+    String statusLine = client.readStringUntil('\n');
+    if (statusLine.indexOf("200") < 0) {
+        Serial.printf("[Update] GitHub API: %s\n", statusLine.c_str());
+        client.stop();
+        return;
+    }
+
+    // Skip headers
+    while (client.available()) {
+        String line = client.readStringUntil('\n');
+        if (line == "\r" || line.length() == 0) break;
+    }
+
+    // Parse JSON with filter (only extract what we need from the large response)
+    JsonDocument filter;
+    filter["tag_name"] = true;
+    filter["html_url"] = true;
+    filter["assets"][0]["browser_download_url"] = true;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, client,
+        DeserializationOption::Filter(filter));
+    client.stop();
+
+    if (err) {
+        Serial.printf("[Update] JSON parse failed: %s\n", err.c_str());
+        return;
+    }
+
+    String tagName = doc["tag_name"].as<String>();
+    if (tagName.startsWith("v") || tagName.startsWith("V")) {
+        tagName = tagName.substring(1);
+    }
+
+    if (tagName.length() == 0) {
+        Serial.println("[Update] No tag_name in response");
+        return;
+    }
+
+    _latestVersion = tagName;
+    _releaseUrl = doc["html_url"].as<String>();
+    String assetUrl = doc["assets"][0]["browser_download_url"].as<String>();
+    if (assetUrl.length() > 0) {
+        _firmwareAssetUrl = assetUrl;
+    }
+
+    Serial.printf("[Update] Latest: %s, Installed: %s\n",
+                  _latestVersion.c_str(), FW_VERSION);
+
+    publishUpdateState();
+}
+
+String MqttHandler::consumeUpdateInstallUrl() {
+    if (_updateInstallPending && _firmwareAssetUrl.length() > 0) {
+        _updateInstallPending = false;
+        return _firmwareAssetUrl;
+    }
+    _updateInstallPending = false;
+    return "";
+}
+
 void MqttHandler::publishHeartbeat() {
     unsigned long uptimeSec = millis() / 1000;
     int32_t wifiRssi = WiFi.RSSI();
@@ -556,6 +690,17 @@ void MqttHandler::handleMessage(const String& topic, const String& payload) {
         if (payload.length() > 0) {
             _pendingOtaUrl = payload;
             Serial.printf("[CMD] OTA update queued: %s\n", payload.c_str());
+        }
+        return;
+    }
+
+    // HA update entity install: rainbird/update/install
+    if (topic == String(MQTT_BASE_TOPIC) + "/update/install") {
+        if (payload == "INSTALL" && _firmwareAssetUrl.length() > 0) {
+            _updateInstallPending = true;
+            Serial.printf("[CMD] Update install requested: %s\n", _firmwareAssetUrl.c_str());
+        } else if (_firmwareAssetUrl.length() == 0) {
+            Serial.println("[CMD] Update install requested but no firmware URL available");
         }
         return;
     }

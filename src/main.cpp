@@ -266,10 +266,16 @@ void loop() {
     // Execute any queued BLE commands from MQTT callbacks
     mqtt.processPendingCommand();
 
-    // Check for OTA update request
+    // Check for OTA update request (manual URL via button)
     String otaUrl = mqtt.consumeOtaUrl();
     if (otaUrl.length() > 0) {
         performOta(otaUrl);
+    }
+
+    // Check for HA update entity install request (GitHub release)
+    String updateUrl = mqtt.consumeUpdateInstallUrl();
+    if (updateUrl.length() > 0) {
+        performOta(updateUrl);
     }
 
     // If a station was just started, schedule follow-up poll after duration + 30s
@@ -285,6 +291,7 @@ void loop() {
         if (millis() - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
             mqtt.publishHeartbeat();
             mqtt.publishBridgeVersion();
+            mqtt.checkGitHubRelease();
             pingHealthcheck();
             lastHeartbeat = millis();
         }
@@ -302,4 +309,6 @@ void loop() {
             pollStatus();
         }
     }
+
+    delay(200);  // Let CPU idle between loop iterations (reduces heat)
 }

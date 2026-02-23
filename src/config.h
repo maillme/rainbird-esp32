@@ -24,6 +24,10 @@
 #define HEALTHCHECK_HOST "hc-ping.com"
 #define HEALTHCHECK_PATH "/4b28c66e-9f1a-45e4-8e55-94f7913f42ea"
 
+// GitHub release checking (for HA update entity)
+#define GITHUB_API_HOST "api.github.com"
+#define GITHUB_RELEASES_PATH "/repos/maillme/rainbird-esp32/releases/latest"
+
 // MQTT Topics
 #define MQTT_BASE_TOPIC "rainbird"
 #define MQTT_DISCOVERY_PREFIX "homeassistant"

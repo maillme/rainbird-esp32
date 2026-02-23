@@ -48,6 +48,11 @@ public:
     // OTA: returns pending URL and clears it (empty string = no OTA pending)
     String consumeOtaUrl();
 
+    // GitHub release checking & HA update entity
+    void checkGitHubRelease();
+    void publishUpdateState();
+    String consumeUpdateInstallUrl();
+
 private:
     WiFiClient _wifiClient;
     PubSubClient _mqtt;
@@ -58,6 +63,10 @@ private:
     PendingCommand _pendingCmd;
     uint16_t _lastStartedDuration = 0;  // Duration of last successfully started station
     String _pendingOtaUrl;
+    String _latestVersion;
+    String _releaseUrl;
+    String _firmwareAssetUrl;
+    bool _updateInstallPending = false;
 
     void connectMqtt();
     void publishDiscovery();
@@ -72,6 +81,7 @@ private:
     void publishSelectDiscovery();
     void publishButtonDiscovery(const char* name, const char* id,
                                 const char* commandTopic, const char* icon);
+    void publishUpdateDiscovery();
 
     static void mqttCallback(char* topic, byte* payload, unsigned int length);
     static MqttHandler* _instance;

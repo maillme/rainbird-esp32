@@ -1,6 +1,6 @@
 {
   "name": "rainbird-esp32",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Rain Bird BLE-to-MQTT bridge for ESP32-C3",
   "scripts": {
