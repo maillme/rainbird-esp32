@@ -1,5 +1,11 @@
 # rainbird-esp32
 
+## 0.2.2
+
+### Patch Changes
+
+- OTA button uses latest GitHub release URL with version check
+
 ## 0.2.1
 
 ### Patch Changes
