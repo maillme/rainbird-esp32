@@ -14,7 +14,7 @@ RainBirdBLE ble;
 MqttHandler mqtt;
 
 unsigned long lastStatusPoll = 0;
-unsigned long lastHeartbeat = 0;
+unsigned long lastHeartbeat = -HEARTBEAT_INTERVAL_MS;  // Fire immediately on first connect
 bool initialPollDone = false;
 unsigned long followUpPollAt = 0;  // Schedule a poll after station duration expires
 
@@ -281,7 +281,7 @@ void loop() {
 
     if (mqtt.isConnected()) {
         // Heartbeat: MQTT publish + healthchecks.io ping (no BLE, every hour)
-        // lastHeartbeat starts at 0, so first heartbeat fires immediately on connect
+        // lastHeartbeat inits to -HEARTBEAT_INTERVAL_MS so first heartbeat fires immediately
         if (millis() - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
             mqtt.publishHeartbeat();
             mqtt.publishBridgeVersion();
