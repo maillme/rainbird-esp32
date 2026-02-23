@@ -204,6 +204,9 @@ void performOta(const String& url) {
     WiFiClientSecure otaClient;
     otaClient.setInsecure();  // Skip cert verification (URL is user-provided via MQTT)
 
+    // GitHub release URLs return 302 redirect to CDN — must follow
+    httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+
     // Feed watchdog during download via progress callback
     httpUpdate.onProgress([](int cur, int total) {
         Serial.printf("[OTA] Progress: %d / %d bytes (%.0f%%)\n", cur, total,

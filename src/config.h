@@ -3,7 +3,7 @@
 #include "secrets.h"
 
 // Firmware version (bump this before each release)
-#define FW_VERSION "0.2.0"
+#define FW_VERSION "0.2.1"
 
 // MQTT Client ID
 #define MQTT_CLIENT_ID "rainbird-bridge"

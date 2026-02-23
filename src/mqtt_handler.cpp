@@ -685,11 +685,15 @@ void MqttHandler::handleMessage(const String& topic, const String& payload) {
         }
     }
 
-    // OTA update: rainbird/ota/set — payload is the firmware URL
+    // OTA button: rainbird/ota/set — uses latest GitHub release firmware URL
     if (topic == String(MQTT_BASE_TOPIC) + "/ota/set") {
-        if (payload.length() > 0) {
-            _pendingOtaUrl = payload;
-            Serial.printf("[CMD] OTA update queued: %s\n", payload.c_str());
+        if (_firmwareAssetUrl.length() > 0 && _latestVersion != FW_VERSION) {
+            _pendingOtaUrl = _firmwareAssetUrl;
+            Serial.printf("[CMD] OTA update queued: %s\n", _firmwareAssetUrl.c_str());
+        } else if (_latestVersion == FW_VERSION) {
+            Serial.println("[CMD] OTA button pressed but already on latest version");
+        } else {
+            Serial.println("[CMD] OTA button pressed but no firmware URL available (no GitHub release found)");
         }
         return;
     }

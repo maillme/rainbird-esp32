@@ -1,5 +1,15 @@
 # rainbird-esp32
 
+## 0.2.1
+
+### Patch Changes
+
+- Fix OTA updates from GitHub releases
+
+  - Follow HTTP redirects during OTA download (GitHub 302 to CDN)
+  - OTA button uses latest GitHub release URL instead of raw payload
+  - Skip OTA if already on latest version
+
 ## 0.2.0
 
 ### Minor Changes
