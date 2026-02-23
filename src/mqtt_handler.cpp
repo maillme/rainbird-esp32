@@ -72,6 +72,7 @@ void MqttHandler::connectMqtt() {
         _mqtt.subscribe((String(MQTT_BASE_TOPIC) + "/rain_delay/set").c_str());
         _mqtt.subscribe((String(MQTT_BASE_TOPIC) + "/water_budget/set").c_str());
         _mqtt.subscribe((String(MQTT_BASE_TOPIC) + "/program/+/set").c_str());
+        _mqtt.subscribe((String(MQTT_BASE_TOPIC) + "/ota/set").c_str());
 
         Serial.println("[MQTT] Subscribed to command topics");
     } else {
@@ -210,6 +211,17 @@ void MqttHandler::publishDiscovery() {
     publishSensorDiscovery("Bridge Free Heap", "bridge_free_heap",
                            (String(MQTT_BASE_TOPIC) + "/free_heap/state").c_str(),
                            "B", nullptr, "mdi:memory");
+    discoveryPause();
+
+    // Bridge firmware version sensor
+    publishSensorDiscovery("Bridge Version", "bridge_version",
+                           (String(MQTT_BASE_TOPIC) + "/bridge_version/state").c_str(),
+                           nullptr, nullptr, "mdi:tag");
+    discoveryPause();
+
+    // OTA update button (payload = firmware URL)
+    publishButtonDiscovery("OTA Update", "ota_update",
+                           (String(MQTT_BASE_TOPIC) + "/ota/set").c_str(), "mdi:download");
     discoveryPause();
 
     // Run Program buttons
@@ -418,6 +430,17 @@ void MqttHandler::publishAvailability(bool online) {
                   online ? "online" : "offline", true);
 }
 
+void MqttHandler::publishBridgeVersion() {
+    _mqtt.publish((String(MQTT_BASE_TOPIC) + "/bridge_version/state").c_str(),
+                  FW_VERSION, true);
+}
+
+String MqttHandler::consumeOtaUrl() {
+    String url = _pendingOtaUrl;
+    _pendingOtaUrl = "";
+    return url;
+}
+
 void MqttHandler::publishHeartbeat() {
     unsigned long uptimeSec = millis() / 1000;
     int32_t wifiRssi = WiFi.RSSI();
@@ -526,6 +549,15 @@ void MqttHandler::handleMessage(const String& topic, const String& payload) {
             Serial.printf("[CMD] Queued: run program %c\n", 'A' + i - 1);
             return;
         }
+    }
+
+    // OTA update: rainbird/ota/set — payload is the firmware URL
+    if (topic == String(MQTT_BASE_TOPIC) + "/ota/set") {
+        if (payload.length() > 0) {
+            _pendingOtaUrl = payload;
+            Serial.printf("[CMD] OTA update queued: %s\n", payload.c_str());
+        }
+        return;
     }
 }
 

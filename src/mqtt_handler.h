@@ -9,7 +9,7 @@
 // Pending command types for deferred BLE execution
 enum CmdType { CMD_NONE, CMD_RUN_STATION, CMD_STOP, CMD_ADVANCE,
                CMD_SET_MODE, CMD_SET_RAIN_DELAY, CMD_SET_WATER_BUDGET,
-               CMD_RUN_PROGRAM };
+               CMD_RUN_PROGRAM, CMD_OTA };
 
 struct PendingCommand {
     CmdType type = CMD_NONE;
@@ -43,6 +43,10 @@ public:
     void publishStationState(uint8_t station, bool on);
     void publishAvailability(bool online);
     void publishHeartbeat();
+    void publishBridgeVersion();
+
+    // OTA: returns pending URL and clears it (empty string = no OTA pending)
+    String consumeOtaUrl();
 
 private:
     WiFiClient _wifiClient;
@@ -53,6 +57,7 @@ private:
     bool _discoveryPublished = false;
     PendingCommand _pendingCmd;
     uint16_t _lastStartedDuration = 0;  // Duration of last successfully started station
+    String _pendingOtaUrl;
 
     void connectMqtt();
     void publishDiscovery();

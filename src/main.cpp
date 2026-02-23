@@ -1,7 +1,9 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <esp_wifi.h>
 #include <esp_task_wdt.h>
+#include <HTTPUpdate.h>
 #include "config.h"
 #include "rainbird_ble.h"
 #include "mqtt_handler.h"
@@ -189,11 +191,52 @@ void pingHealthcheck() {
     }
 }
 
+void performOta(const String& url) {
+    Serial.printf("[OTA] Starting update from: %s\n", url.c_str());
+
+    // Publish status so HA shows progress
+    mqtt.publishAvailability(true);  // keep alive during update
+
+    // Disable watchdog during OTA (download can take >30s)
+    esp_task_wdt_delete(NULL);
+    Serial.println("[OTA] Watchdog disabled for update");
+
+    WiFiClientSecure otaClient;
+    otaClient.setInsecure();  // Skip cert verification (URL is user-provided via MQTT)
+
+    // Feed watchdog during download via progress callback
+    httpUpdate.onProgress([](int cur, int total) {
+        Serial.printf("[OTA] Progress: %d / %d bytes (%.0f%%)\n", cur, total,
+                      total > 0 ? (float)cur / total * 100 : 0);
+    });
+
+    t_httpUpdate_return result = httpUpdate.update(otaClient, url);
+
+    // If we get here, the update failed (success would reboot)
+    switch (result) {
+        case HTTP_UPDATE_FAILED:
+            Serial.printf("[OTA] Update failed: %s (err %d)\n",
+                          httpUpdate.getLastErrorString().c_str(),
+                          httpUpdate.getLastError());
+            break;
+        case HTTP_UPDATE_NO_UPDATES:
+            Serial.println("[OTA] No update available");
+            break;
+        default:
+            Serial.println("[OTA] Unexpected result");
+            break;
+    }
+
+    // Re-enable watchdog
+    esp_task_wdt_add(NULL);
+    Serial.println("[OTA] Watchdog re-enabled");
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    Serial.println("\n=== Rain Bird BLE-to-MQTT Bridge ===");
+    Serial.printf("\n=== Rain Bird BLE-to-MQTT Bridge v%s ===\n", FW_VERSION);
     Serial.println("Starting...");
 
     // Enable hardware watchdog (auto-reboots if loop hangs)
@@ -223,6 +266,12 @@ void loop() {
     // Execute any queued BLE commands from MQTT callbacks
     mqtt.processPendingCommand();
 
+    // Check for OTA update request
+    String otaUrl = mqtt.consumeOtaUrl();
+    if (otaUrl.length() > 0) {
+        performOta(otaUrl);
+    }
+
     // If a station was just started, schedule follow-up poll after duration + 30s
     uint16_t startedDur = mqtt.consumeStartedDuration();
     if (startedDur > 0) {
@@ -232,8 +281,10 @@ void loop() {
 
     if (mqtt.isConnected()) {
         // Heartbeat: MQTT publish + healthchecks.io ping (no BLE, every hour)
+        // lastHeartbeat starts at 0, so first heartbeat fires immediately on connect
         if (millis() - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
             mqtt.publishHeartbeat();
+            mqtt.publishBridgeVersion();
             pingHealthcheck();
             lastHeartbeat = millis();
         }
