@@ -15,6 +15,18 @@ void MqttHandler::init(RainBirdBLE* ble) {
     _mqtt.setBufferSize(2048);
     _mqtt.setKeepAlive(60);
 
+    // Derive device ID and name from RAINBIRD_DEVICE_NAME (e.g. "BAT-BT-4 579A")
+    // Device ID: "rainbird_bat_bt_4_579a" (lowercase, underscores)
+    // Device name: "Rain Bird BAT-BT-4 579A"
+    String raw = RAINBIRD_DEVICE_NAME;
+    _deviceId = "rainbird_";
+    for (unsigned int i = 0; i < raw.length(); i++) {
+        char c = raw.charAt(i);
+        if (c == ' ' || c == '-') _deviceId += '_';
+        else _deviceId += (char)tolower(c);
+    }
+    _deviceName = "Rain Bird " + raw;
+
     for (int i = 0; i < NUM_STATIONS; i++) {
         _stationDurations[i] = DEFAULT_STATION_DURATION;
     }
@@ -92,9 +104,9 @@ void MqttHandler::connectMqtt() {
 // --- HA MQTT Discovery ---
 
 String MqttHandler::deviceJson() {
-    return "\"dev\":{\"ids\":[\"rainbird_bat_bt_579a\"],"
-           "\"name\":\"Rain Bird BAT-BT-4\","
-           "\"mdl\":\"ESP-BAT-BT-4\","
+    return "\"dev\":{\"ids\":[\"" + _deviceId + "\"],"
+           "\"name\":\"" + _deviceName + "\","
+           "\"mdl\":\"" + String(RAINBIRD_DEVICE_NAME) + "\","
            "\"mf\":\"Rain Bird\"}";
 }
 
@@ -169,7 +181,7 @@ void MqttHandler::publishDiscovery() {
         doc["ic"] = "mdi:weather-rainy";
         doc["avty_t"] = String(MQTT_BASE_TOPIC) + "/availability";
         JsonObject dev = doc["dev"].to<JsonObject>();
-        dev["ids"][0] = "rainbird_bat_bt_579a";
+        dev["ids"][0] = _deviceId;
 
         char buf[512];
         serializeJson(doc, buf);
@@ -191,7 +203,7 @@ void MqttHandler::publishDiscovery() {
         doc["ic"] = "mdi:water-percent";
         doc["avty_t"] = String(MQTT_BASE_TOPIC) + "/availability";
         JsonObject dev = doc["dev"].to<JsonObject>();
-        dev["ids"][0] = "rainbird_bat_bt_579a";
+        dev["ids"][0] = _deviceId;
 
         char buf[512];
         serializeJson(doc, buf);
@@ -261,10 +273,10 @@ void MqttHandler::publishSwitchDiscovery(uint8_t station) {
     doc["opt"] = true;  // Optimistic: show ON immediately while BLE command executes
     doc["avty_t"] = String(MQTT_BASE_TOPIC) + "/availability";
     JsonObject dev = doc["dev"].to<JsonObject>();
-    dev["ids"][0] = "rainbird_bat_bt_579a";
+    dev["ids"][0] = _deviceId;
     if (station == 1) {
-        dev["name"] = "Rain Bird BAT-BT-4";
-        dev["mdl"] = "ESP-BAT-BT-4";
+        dev["name"] = _deviceName;
+        dev["mdl"] = RAINBIRD_DEVICE_NAME;
         dev["mf"] = "Rain Bird";
     }
 
@@ -287,7 +299,7 @@ void MqttHandler::publishNumberDiscovery(uint8_t station) {
     doc["ic"] = "mdi:timer";
     doc["avty_t"] = String(MQTT_BASE_TOPIC) + "/availability";
     JsonObject dev = doc["dev"].to<JsonObject>();
-    dev["ids"][0] = "rainbird_bat_bt_579a";
+    dev["ids"][0] = _deviceId;
 
     char buf[512];
     serializeJson(doc, buf);
@@ -310,7 +322,7 @@ void MqttHandler::publishSelectDiscovery() {
     doc["ops"][0] = "Off";
     doc["ops"][1] = "Auto";
     JsonObject dev = doc["dev"].to<JsonObject>();
-    dev["ids"][0] = "rainbird_bat_bt_579a";
+    dev["ids"][0] = _deviceId;
 
     char buf[512];
     serializeJson(doc, buf);
@@ -326,7 +338,7 @@ void MqttHandler::publishButtonDiscovery(const char* name, const char* id,
     doc["ic"] = icon;
     doc["avty_t"] = String(MQTT_BASE_TOPIC) + "/availability";
     JsonObject dev = doc["dev"].to<JsonObject>();
-    dev["ids"][0] = "rainbird_bat_bt_579a";
+    dev["ids"][0] = _deviceId;
 
     char buf[512];
     serializeJson(doc, buf);
@@ -344,7 +356,7 @@ void MqttHandler::publishUpdateDiscovery() {
     doc["pl_inst"] = "INSTALL";
     doc["avty_t"] = String(MQTT_BASE_TOPIC) + "/availability";
     JsonObject dev = doc["dev"].to<JsonObject>();
-    dev["ids"][0] = "rainbird_bat_bt_579a";
+    dev["ids"][0] = _deviceId;
 
     char buf[512];
     serializeJson(doc, buf);
@@ -364,7 +376,7 @@ void MqttHandler::publishSensorDiscovery(const char* name, const char* id,
     if (deviceClass) doc["dev_cla"] = deviceClass;
     doc["avty_t"] = String(MQTT_BASE_TOPIC) + "/availability";
     JsonObject dev = doc["dev"].to<JsonObject>();
-    dev["ids"][0] = "rainbird_bat_bt_579a";
+    dev["ids"][0] = _deviceId;
 
     char buf[512];
     serializeJson(doc, buf);
@@ -381,7 +393,7 @@ void MqttHandler::publishBinarySensorDiscovery(const char* name, const char* id,
     if (deviceClass) doc["dev_cla"] = deviceClass;
     doc["avty_t"] = String(MQTT_BASE_TOPIC) + "/availability";
     JsonObject dev = doc["dev"].to<JsonObject>();
-    dev["ids"][0] = "rainbird_bat_bt_579a";
+    dev["ids"][0] = _deviceId;
 
     char buf[512];
     serializeJson(doc, buf);

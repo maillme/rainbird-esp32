@@ -58,6 +58,8 @@ private:
     PubSubClient _mqtt;
     RainBirdBLE* _ble = nullptr;
 
+    String _deviceId;    // e.g. "rainbird_bat_bt_579a" (derived from RAINBIRD_DEVICE_NAME)
+    String _deviceName;  // e.g. "Rain Bird BAT-BT-4 579A" (derived from RAINBIRD_DEVICE_NAME)
     uint16_t _stationDurations[NUM_STATIONS]; // per-station duration in minutes
     bool _discoveryPublished = false;
     PendingCommand _pendingCmd;

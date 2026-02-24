@@ -25,7 +25,7 @@ The Rain Bird ESP-BAT-BT-4 uses **SIP (Standard Irrigation Protocol)** over BLE,
 
 Full UUID suffix: `8E22-4541-9D4C-21EDAE82ED19`
 
-**Device name**: `BAT-BT-4 579A`
+**Device name**: `BAT-BT-4 XXXX` (last 4 chars are unique per controller)
 
 **Primary command flow**: Write to **FE46**, receive response on **FE47**.
 
