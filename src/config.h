@@ -3,7 +3,7 @@
 #include "secrets.h"
 
 // Firmware version (bump this before each release)
-#define FW_VERSION "0.2.3"
+#define FW_VERSION "0.3.0"
 
 // MQTT Client ID
 #define MQTT_CLIENT_ID "rainbird-bridge"
@@ -14,8 +14,10 @@
 #define RAINBIRD_NOTIFY_UUID  "0000fe47-8e22-4541-9d4c-21edae82ed19"
 
 // Timing
-#define STATUS_POLL_INTERVAL_MS  14400000  // 4 hours (BLE poll — saves Rain Bird battery)
-#define HEARTBEAT_INTERVAL_MS    3600000   // 1 hour (MQTT heartbeat + healthcheck, no BLE)
+#define STATUS_POLL_INTERVAL_MS   14400000  // 4 hours (BLE poll — saves Rain Bird battery)
+#define HEARTBEAT_INTERVAL_MS     3600000  // 1 hour (MQTT heartbeat — lightweight, no network)
+#define HEALTHCHECK_INTERVAL_MS  14400000  // 4 hours (healthchecks.io ping)
+#define RELEASE_CHECK_INTERVAL_MS 86400000 // 24 hours (GitHub release check)
 #define BLE_CONNECT_TIMEOUT_MS   10000     // 10 seconds
 #define BLE_RESPONSE_TIMEOUT_MS  5000      // 5 seconds
 #define DEFAULT_STATION_DURATION 10        // minutes

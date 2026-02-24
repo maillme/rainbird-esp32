@@ -3,6 +3,7 @@
 #include <WiFiClientSecure.h>
 #include <esp_wifi.h>
 #include <esp_task_wdt.h>
+#include <esp_pm.h>
 #include <HTTPUpdate.h>
 #include "config.h"
 #include "rainbird_ble.h"
@@ -15,6 +16,8 @@ MqttHandler mqtt;
 
 unsigned long lastStatusPoll = 0;
 unsigned long lastHeartbeat = -HEARTBEAT_INTERVAL_MS;  // Fire immediately on first connect
+unsigned long lastHealthcheck = -HEALTHCHECK_INTERVAL_MS;  // Fire immediately on first connect
+unsigned long lastReleaseCheck = -RELEASE_CHECK_INTERVAL_MS;  // Fire immediately on first connect
 bool initialPollDone = false;
 unsigned long followUpPollAt = 0;  // Schedule a poll after station duration expires
 
@@ -266,6 +269,19 @@ void setup() {
     // Connect WiFi
     connectWiFi();
 
+    // Enable automatic light sleep — CPU sleeps during delay() while WiFi stays associated
+    esp_pm_config_esp32c3_t pm_config = {
+        .max_freq_mhz = 160,   // Full speed when active
+        .min_freq_mhz = 10,    // Minimum when idle
+        .light_sleep_enable = true
+    };
+    esp_err_t pm_err = esp_pm_configure(&pm_config);
+    if (pm_err == ESP_OK) {
+        Serial.println("[PM] Automatic light sleep enabled (~2-5mA idle)");
+    } else {
+        Serial.printf("[PM] Light sleep config failed: %d\n", pm_err);
+    }
+
     // Init MQTT
     mqtt.init(&ble);
 }
@@ -302,14 +318,23 @@ void loop() {
     }
 
     if (mqtt.isConnected()) {
-        // Heartbeat: MQTT publish + healthchecks.io ping (no BLE, every hour)
-        // lastHeartbeat inits to -HEARTBEAT_INTERVAL_MS so first heartbeat fires immediately
+        // Heartbeat: lightweight MQTT publish only (every hour)
         if (millis() - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
             mqtt.publishHeartbeat();
             mqtt.publishBridgeVersion();
-            mqtt.checkGitHubRelease();
-            pingHealthcheck();
             lastHeartbeat = millis();
+        }
+
+        // Healthcheck ping (every 4 hours)
+        if (millis() - lastHealthcheck >= HEALTHCHECK_INTERVAL_MS) {
+            pingHealthcheck();
+            lastHealthcheck = millis();
+        }
+
+        // GitHub release check (every 24 hours)
+        if (millis() - lastReleaseCheck >= RELEASE_CHECK_INTERVAL_MS) {
+            mqtt.checkGitHubRelease();
+            lastReleaseCheck = millis();
         }
 
         // BLE status poll: first attempt right away, then every STATUS_POLL_INTERVAL_MS

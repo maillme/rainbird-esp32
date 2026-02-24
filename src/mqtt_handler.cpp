@@ -16,15 +16,13 @@ void MqttHandler::init(RainBirdBLE* ble) {
     _mqtt.setKeepAlive(60);
 
     // Derive device ID and name from RAINBIRD_DEVICE_NAME (e.g. "BAT-BT-4 579A")
-    // Device ID: "rainbird_bat_bt_4_579a" (lowercase, underscores)
+    // Device ID uses the unique suffix: "rainbird_bat_bt_579a"
     // Device name: "Rain Bird BAT-BT-4 579A"
     String raw = RAINBIRD_DEVICE_NAME;
-    _deviceId = "rainbird_";
-    for (unsigned int i = 0; i < raw.length(); i++) {
-        char c = raw.charAt(i);
-        if (c == ' ' || c == '-') _deviceId += '_';
-        else _deviceId += (char)tolower(c);
-    }
+    int lastSpace = raw.lastIndexOf(' ');
+    String suffix = (lastSpace >= 0) ? raw.substring(lastSpace + 1) : raw;
+    suffix.toLowerCase();
+    _deviceId = "rainbird_bat_bt_" + suffix;
     _deviceName = "Rain Bird " + raw;
 
     for (int i = 0; i < NUM_STATIONS; i++) {

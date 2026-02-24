@@ -1,5 +1,16 @@
 # rainbird-esp32
 
+## 0.3.0
+
+### Minor Changes
+
+- Add automatic light sleep for battery operation, dynamic HA device identity
+
+  - Enable ESP32-C3 automatic light sleep (~2-5mA idle vs ~50mA before)
+  - WiFi stays associated during sleep, MQTT commands received in near real-time
+  - Derive HA device ID and name from RAINBIRD_DEVICE_NAME in secrets.h
+  - Add README with setup guide, entity list, and architecture overview
+
 ## 0.2.3
 
 ### Patch Changes
