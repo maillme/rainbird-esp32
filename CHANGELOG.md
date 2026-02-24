@@ -1,5 +1,11 @@
 # rainbird-esp32
 
+## 0.3.1
+
+### Patch Changes
+
+- Fix HA device ID to match original format, prevent ghost device
+
 ## 0.3.0
 
 ### Minor Changes
